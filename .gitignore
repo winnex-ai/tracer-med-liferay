@@ -1,0 +1,36 @@
+# ---- Secrets & tokens (NEVER commit) ----
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.crt
+*.p12
+secrets/
+credentials/
+
+# ---- Build / deploy artifacts ----
+*.jar
+*.lpkg
+*.war
+build/
+dist/
+target/
+out/
+
+# ---- Liferay volumes (runtime data) ----
+liferay/volumes/data/
+liferay/volumes/deploy/*.jar
+liferay/volumes/deploy/*.lpkg
+
+# ---- Python ----
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# ---- Misc ----
+.DS_Store
+*.log
+# Internal engineering notes (NOT distributed)
+internal/

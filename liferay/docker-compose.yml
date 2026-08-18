@@ -1,0 +1,88 @@
+# Tracer-MED × Liferay -- Compose base (Fase 1)
+# Liferay CE 7.4 + Postgres 16. O serviço de ponte Madhava entra na Fase 2.
+#
+# Uso:
+#   docker compose -f liferay/docker-compose.yml up -d
+#   # aguardar ~1-3 min na primeira subida (initial build + portal)
+#   curl -I http://localhost:8080
+#
+# Dados persistentes em liferay/volumes/ (fora do container).
+
+services:
+  liferay:
+    image: liferay/portal:7.4.3.132-ga132
+    container_name: tracer-med-liferay
+    ports:
+      - "8080:8080"
+    environment:
+      # Memória (RAM disponível: 28GB)
+      CATALINA_OPTS: "-Xms1g -Xmx3g -XX:MaxMetaspaceSize=1g"
+    volumes:
+      # Padrão oficial da imagem: /mnt/liferay/files/* é copiado para
+      # /opt/liferay ANTES do portal iniciar. O portal-ext.properties
+      # (JDBC Postgres) está em ./files/.
+      - ./files:/mnt/liferay/files:ro
+      # Deploy automático de módulos OSGi (jar/war) -- Fase 3
+      - ./volumes/deploy:/opt/liferay/deploy
+      # Dados persistentes (osgi, tomcat, log)
+      - ./volumes/data:/opt/liferay/data
+    depends_on:
+      - db
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 30s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    networks:
+      - tracer-net
+
+  db:
+    image: postgres:16-alpine
+    container_name: tracer-med-db
+    environment:
+      POSTGRES_DB: lportal
+      POSTGRES_USER: liferay
+      POSTGRES_PASSWORD: liferay
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U liferay -d lportal"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - tracer-net
+
+  # Fase 2 -- ponte Madhava->Liferay (mesma rede; o módulo OSGi chama
+  # http://madhava-service:8600). Build do Dockerfile em madhava-service/.
+  madhava-service:
+    build: ../madhava-service
+    container_name: tracer-med-madhava
+    ports:
+      - "8600:8600"
+    env_file:
+      - ../madhava-service/.env
+    environment:
+      TRACER_MED_EVIDENCE_PATH: /var/lib/tracer-med/evidence
+    volumes:
+      - madhava-evidence:/var/lib/tracer-med/evidence
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8600/v1/health', timeout=5)"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks:
+      - tracer-net
+
+volumes:
+  db-data:
+  madhava-evidence:
+
+networks:
+  tracer-net:
+    driver: bridge

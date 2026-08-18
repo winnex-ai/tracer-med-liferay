@@ -1,0 +1,7 @@
+# madhava-service — ponte Madhava -> Liferay
+# winnex-madhava 1.8.8 depende APENAS de numpy (verificado no pyproject).
+# O motor NÃO faz embedding de texto; recebe vetores float32 prontos.
+winnex-madhava==1.8.8
+fastapi>=0.100
+uvicorn>=0.20
+numpy>=1.24
