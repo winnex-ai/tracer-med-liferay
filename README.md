@@ -41,39 +41,137 @@ the [Documentation](#documentation) sections at the end.
 
 ---
 
-## Screen demos
+## Important: Tracer-MED is NOT a plug-and-play RAG solution
 
-### Liferay home (guest)
+> **Please read this before you buy or deploy.**
 
-![Liferay Home](docs/screenshots/01-home-guest.png)
+**Tracer-MED is Madhava made easy in Liferay.** It is the
+guaranteed-retrieval layer + the Liferay UI already built: the portlet, the
+engine bridge, the soundness proof and the audit trail all work out of the
+box. What is **not** included is the data side (embeddings, encoding, tuning,
+optional LLM answers). It is therefore **not** a complete, out-of-the-box RAG
+(Retrieval-Augmented Generation) product. In particular:
 
-The portal landing page, before login.
+- **You must generate the embeddings yourself.** The Madhava engine does **not**
+  embed text. It has no "give me text, get me a vector" endpoint. Its input is
+  already-embedded **float32 vectors** (see the
+  [Model Integration Guide](docs/MODEL_INTEGRATION_GUIDE.md) for the exact
+  contract).
+- **RAG answers (LLM-generated responses) are not included.** Tracer-MED
+  returns the ranked clinical records **plus the soundness proof**; it does not
+  generate an answer paragraph from them.
 
-### Login
+### Why there is no plug-and-play: your data decides
 
-![Login](docs/screenshots/02-login.png)
+"Plug and play" would mean every hospital has identical data -- same language,
+same specialties, same structured fields, same scale, same ingestion source.
+No two do. Each of the scenarios below changes at least one component of the
+pipeline, and it is exactly **this variability that Winnex solves for you**
+(see "Your options", below).
+
+| Scenario | What it forces you to decide |
+|---|---|
+| **Free-text clinical notes** | Which embedding model, and for which **language and domain** (PT vs EN; radiology vs cardiology vs discharge summaries). Domain mismatch silently degrades retrieval. Model choice, dimension and token limits are decisions, not defaults. |
+| **Structured-only data** (vitals, labs, scores) | A numeric **feature vector** design: how to clip and scale each field, and what "similarity" means in *your* feature space. Different scaling = different results. |
+| **Categorical data** (ICD-10, departments, procedures) | A frozen **codebook** (which codes exist in *your* org) and a one-hot/embedding encoding. New codes added later change the space and require re-indexing. |
+| **Mixed records** (text + vitals + ICD-10) | How to combine the signals into **one unit-norm vector** (concatenate? weight? separate index?) and re-normalize. There is no universal recipe; the mix differs per client. |
+| **Scale** | Hundreds of docs (linear scan with proof, defaults are fine) vs millions (tight PCA-based bounds, cascade tuning, `early_exit`, possibly GPU). The settings that make sense at 500 documents are not the ones at 5M. |
+| **Ingestion source** | SQL, FHIR, CSV, PDFs -- each needs its own loader/normalizer seam (the scheduler's `CorpusLoader`). There is no single import path. |
+| **Tenant & corpora shape** | How companies map to isolated indices, and whether the codebook is shared or per-tenant. Isolation is guaranteed by the engine, but the mapping is a design choice. |
+| **Output expectations** | Retrieval-with-proof only vs retrieval + LLM answers (RAG) vs full question-answering with citations. Each is a different scope of work. |
+
+Any one of these scenarios is enough to make a generic pipeline wrong; in
+practice most clients present several at once. That is normal -- and it is the
+reason Winnex offers a full menu below.
+
+### What Tracer-MED actually does
+
+```
+Your text / vitals / ICD-10
+        |
+        |   (embedding happens HERE -- outside Madhava,
+        |    with BGE, BlueBERT, OpenAI, your own model, ...)
+        v
+   float32 vectors  ----POST /v1/index---->  winnex-madhava (retrieval + proof)
+                                                     |
+                       POST /v1/search <------------+  ranked records
+                            |                            + bound_violations: 0
+                            v
+                     Tracer-MED portlet (Liferay UI)
+```
+
+Madhava v1.8.8 is a **vector search engine with a mathematical guarantee**.
+Its public tuning surface is vector-side: `metric="cosine"`, `stage1_dim` /
+`stage2_dim` (projection cascade, defaults 64 / 128), `k`, `k1_fraction`,
+`modulation`, `postfilter`, `normalize_input`, and `early_exit`. At
+million-scale corpora the engine can also use tighter PCA-based bounds
+(`basis="pca_corpus"`, see the
+[Model Integration Guide](docs/MODEL_INTEGRATION_GUIDE.md)). Every one of these
+parameters operates on **vectors** -- none of them turns text into vectors for
+you.
+
+### How to get the embeddings
+
+| Your data | Who generates the vectors |
+|---|---|
+| Text (clinical notes, reports) | An embedding model -- BGE, BlueBERT, OpenAI, Qwen, or your own |
+| Structured (vitals, labs) | A numeric encoder you (or Winnex) implement |
+| Categorical (ICD-10, department) | One-hot / embedding encoding |
+| Mixed | Concatenate the encodings into one unit-norm vector |
+
+---
+
+### Your options -- choose the level of involvement
+
+Winnex offers **three ways** to take Tracer-MED into production. Pick the one
+that fits your team and budget; all of them end with the same Madhava
+guarantee.
+
+| Option | What you get | Best for |
+|---|---|---|
+| **A. Winnex implementation service** | Winnex builds your complete pipeline: embedding-model selection, the inference/encoding step, the RAG orchestration (retrieval + LLM answer) if you want it, Madhava tuning, and the go-live. You use the UI and read the proofs. | Teams that want it done, correct, and proven, without building ML in-house. |
+| **B. Winnex full inference stack** | Our ready-made embedding / inference infrastructure (a separate product) wired to Tracer-MED: vectors generated for you at scale, retrieval with proof, and optional LLM answers -- no model glue on your side. | Teams that prefer a managed stack over running their own models. |
+| **C. Your existing stack** | Bring your own embeddings and/or your own LLM. Tracer-MED's Madhava bridge consumes the float32 vectors your stack produces -- the proof and the audit work the same on top of your pipeline. | Teams with an existing ML/LLM stack that just want the guaranteed retrieval layer + UI. |
+
+### The wider Winnex AI product family
+
+Tracer-MED is one deployment of Madhava, and the integration does not stop
+here. Winnex also ships:
+
+- **OpenAI-compatible API plug** -- expose Madhava behind an OpenAI-style
+  endpoint, so tools and agents that already speak the OpenAI API can call it
+  with zero new code.
+- **Inference stack** -- the managed embedding/LLM infrastructure used in
+  Option B, also available standalone for non-Liferay projects.
+
+You can start with Tracer-MED on top of whatever stack you have today
+(Option C), let Winnex build it (Option A), or run the full Winnex stack
+(Option B). If your project is not Liferay, the OpenAI-compatible plug and the
+inference stack let you use Madhava's guarantee anywhere.
+
+> **To budget an inference or RAG implementation, email
+> [info@winnex.ai](mailto:info@winnex.ai)**. Tell us your data format, your
+> volume, your current stack, and whether you want retrieval-with-proof only or
+> retrieval + LLM answers, and we will quote the right option for you.
+
+---
+
+## Screen demo (what the portlet shows)
+
+### Liferay login
+
+![Liferay Login](docs/screenshots/01-liferay-login.png)
 
 Standard Liferay sign-in. Default demo admin: `test@liferay.com` / `test`.
 
-### Authenticated home
+### Tracer-MED portlet with results + proof
 
-![Home Authenticated](docs/screenshots/04-home-authed.png)
+![Tracer-MED Portlet Results](docs/screenshots/02-tracermed-portlet-results.png)
 
-The portal as seen by a logged-in user. The **Tracer-MED** widget is available
-under **Add -> Widgets -> Winnex**.
-
-### Tracer-MED portlet
-
-![Portlet Render](docs/screenshots/05-portlet-render.png)
-
-The Tracer-MED portlet, active and registered. Every authenticated user of the
-portal can run a clinical triage with the mathematical proof.
-
-### Control panel
-
-![Control Panel](docs/screenshots/06-control-panel.png)
-
-The Liferay control panel, where the deployed Winnex bundles are managed.
+The portlet shows: the clinical query form (query + ICD-10 + department
+filters), the **sound proof** banner (0 bound violations), the audit block
+(tenant_id, bound_violations, bound_pairs, sound, engine, latency_ms) and the
+results table.
 
 ---
 
