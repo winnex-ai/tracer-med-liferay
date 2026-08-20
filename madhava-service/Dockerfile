@@ -1,19 +1,15 @@
 # madhava-service — ponte HTTP Madhava -> Liferay
-# Base: Python 3.12-slim + wheel manylinux cp312 do winnex-madhava (C++20).
-# IMPORTANTE: o winnex-madhava 1.8.8 publica wheel manylinux apenas para
-# cp312 no PyPI (verificado). Python 3.12 evita compilar o sdist (C++).
+# Base: Python 3.12-slim. Consumes winnex-tracer + winnex-ai-normalize +
+# winnex-madhava 1.9.2 from PyPI.
 FROM python:3.12-slim
 
 WORKDIR /app
 
-# Copia o codigo do servico de ponte (src/app.py) e as dependencias
 COPY src/ /app/src/
 COPY requirements.txt /app/requirements.txt
 
-# winnex-madhava 1.8.8 depende APENAS de numpy (verificado no pyproject).
-# Nao usa sentence-transformers. O motor recebe vetores float32 prontos.
-# O wheel manylinux cp312 instala sem compilador.
-RUN pip install --no-cache-dir -r /app/requirements.txt
+RUN pip install --no-cache-dir --force-reinstall -r /app/requirements.txt
+RUN pip install --no-cache-dir --force-reinstall "winnex-madhava==1.9.2"
 
 ENV PYTHONPATH=/app/src
 EXPOSE 8600

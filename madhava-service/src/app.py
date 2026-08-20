@@ -192,12 +192,36 @@ def search(req: SearchRequest):
     q = np.ascontiguousarray(np.array(req.query, dtype=np.float32))
 
     t0 = time.time()
-    # Use the motor's witness audit (winnex-madhava >= 1.9.1) so the response
-    # carries the per-document Cauchy-Schwarz certificate — the proof that
-    # every excluded doc is mathematically outside the exact top-K. The
-    # certificate is the motor's own pruning decision (captured at decision
-    # time), not a recomputed one.
-    if hasattr(engine, "search_audited"):
+    # PRODUCTION path (winnex-tracer >= 1.0.0 + winnex-madhava >= 1.9.2):
+    # the shared AuditCommitment — the motor returns a lightweight
+    # count+threshold+boundary-sample, winnex_tracer.core signs it with
+    # Ed25519 (make_worm_record), and the ~500-byte signed record is written
+    # to the WORM evidence chain (TRACER_MED_EVIDENCE_PATH). No duplicated
+    # commitment logic — it lives in the shared package.
+    from winnex_tracer.core import make_worm_record
+    from winnex_tracer.persistence import WormStorage
+
+    if hasattr(engine, "search_with_commitment"):
+        rec = make_worm_record(engine, q, k=req.k, max_sample=50,
+                               query_vector_bytes=q.tobytes())
+        r = type("R", (), {
+            "indices": rec["indices"],
+            "bound_violations": rec["bound_violations"],
+            "bound_pairs": rec["bound_pairs"],
+            "k1": None, "k2": None, "k3": None,
+            "audit_excluded": rec["total_provably_excluded"],
+            "audit": rec["sampled_records"],
+            "commitment": rec,
+        })()
+        # Write the signed commitment to the WORM evidence chain.
+        try:
+            worm_path = os.environ.get(
+                "TRACER_MED_EVIDENCE_PATH", "/var/lib/tracer-med/evidence")
+            WormStorage(base_path=worm_path).append(
+                {"commitment": rec, "_ctx": {"tenant_id": req.tenant_id}})
+        except Exception as e:
+            logger.warning("WORM evidence persist failed: %s", e)
+    elif hasattr(engine, "search_audited"):
         ar = engine.search_audited(q, k=req.k, max_audit_records=500)
         r = type("R", (), {
             "indices": ar["indices"],
@@ -206,11 +230,13 @@ def search(req: SearchRequest):
             "k1": None, "k2": None, "k3": None,
             "audit_excluded": ar["audit_excluded"],
             "audit": ar["audit"],
+            "commitment": None,
         })()
     else:
         r = engine.search(q)
         r.audit_excluded = 0
         r.audit = []
+        r.commitment = None
     latency_ms = (time.time() - t0) * 1000
 
     results = []
@@ -227,6 +253,33 @@ def search(req: SearchRequest):
 
     _record_search(latency_ms, int(r.bound_violations), int(r.bound_pairs))
 
+    # Normalize the audit records: the 1.9.2 commitment sample has
+    # {doc_id, upper_bound, excluded}; the 1.9.1 certificate has the full
+    # fields. Handle both.
+    def _norm_audit_rec(rec):
+        if "true_cosine" in rec:
+            return {
+                "doc_id": int(rec["doc_id"]),
+                "true_cosine": float(rec["true_cosine"]),
+                "projected_cosine": float(rec.get("projected_cosine", 0.0)),
+                "residual_norm": float(rec.get("residual_norm", 0.0)),
+                "upper_bound": float(rec["upper_bound"]),
+                "threshold": float(rec["threshold"]),
+                "excluded": bool(rec["excluded"]),
+                "stage": str(rec.get("stage", "")),
+            }
+        return {
+            "doc_id": int(rec["doc_id"]),
+            "true_cosine": 0.0,
+            "projected_cosine": 0.0,
+            "residual_norm": 0.0,
+            "upper_bound": float(rec.get("upper_bound", 0.0)),
+            "threshold": float(getattr(r, "commitment", None)["global_threshold"])
+                        if getattr(r, "commitment", None) else 0.0,
+            "excluded": bool(rec.get("excluded", True)),
+            "stage": "stage1",
+        }
+
     return {
         "results": results,
         "bound_violations": int(r.bound_violations),
@@ -236,23 +289,88 @@ def search(req: SearchRequest):
         "k3": int(r.k3) if r.k3 is not None else None,
         "sound": int(r.bound_violations) == 0,
         "audit_excluded": int(r.audit_excluded),
-        # The per-document mathematical certificate (winnex-madhava >= 1.9.1).
-        "audit": [
-            {
-                "doc_id": int(rec["doc_id"]),
-                "true_cosine": float(rec["true_cosine"]),
-                "projected_cosine": float(rec["projected_cosine"]),
-                "residual_norm": float(rec["residual_norm"]),
-                "upper_bound": float(rec["upper_bound"]),
-                "threshold": float(rec["threshold"]),
-                "excluded": bool(rec["excluded"]),
-                "stage": str(rec["stage"]),
-            }
-            for rec in r.audit
-        ],
+        # The audit commitment (1.9.2+) or per-document certificate (1.9.1).
+        "audit": [_norm_audit_rec(rec) for rec in r.audit],
+        "commitment": getattr(r, "commitment", None),
         "engine": "winnex-madhava " + getattr(wm, "__version__", "?"),
         "latency_ms": round(latency_ms, 3),
         "tenant_id": req.tenant_id,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Normalization integration (winnex-ai-normalize) — provider registration
+# and text → vector normalization, so the Liferay form can register embedding
+# providers and any client can feed text to the Madhava engine.
+# ---------------------------------------------------------------------------
+class ProviderIn(BaseModel):
+    name: str
+    type: str = "openai_compat"
+    model: str = ""
+    base_url: str = ""
+    api_key: str = ""
+    api_key_env: str = ""
+    dim: int = 0
+    timeout: float = 20.0
+    priority: int = 10
+    enabled: bool = True
+
+
+class NormalizeRequest(BaseModel):
+    input: List[str]
+    model: str = ""
+
+
+def _normalize_admin_required(authorization: str = Header(default="", alias="Authorization")):
+    """Admin check for provider registration (fail-closed)."""
+    from winnex_ai_normalize.core.provider_registry import require_admin_key
+    try:
+        require_admin_key(authorization)
+    except PermissionError as e:
+        raise HTTPException(403, str(e))
+
+
+@app.get("/v1/normalize/providers")
+def list_providers(authorization: str = Header(default="", alias="Authorization")):
+    """List registered embedding providers (secrets masked)."""
+    _normalize_admin_required(authorization)
+    from winnex_ai_normalize.core.provider_registry import get_registry
+    return {"providers": get_registry().list()}
+
+
+@app.post("/v1/normalize/providers")
+def upsert_provider(provider: ProviderIn,
+                    authorization: str = Header(default="", alias="Authorization")):
+    """Register an embedding provider via the Liferay form (admin key)."""
+    _normalize_admin_required(authorization)
+    from winnex_ai_normalize.core.provider_registry import get_registry
+    try:
+        cfg = get_registry().upsert(provider.model_dump())
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    return {"status": "registered", "provider": cfg.name}
+
+
+@app.post("/v1/normalize/embed")
+def normalize_embed(req: NormalizeRequest):
+    """Text → float32 vectors (via the registered embedding provider).
+
+    This is the plug that connects Liferay text input to the Madhava engine:
+    the caller sends text, the normalizer embeds it with the configured
+    provider (failover, no fake fallback), and returns Madhava-ready vectors.
+    """
+    from winnex_ai_normalize.core.embedding import get_embedding_service
+    try:
+        vecs = get_embedding_service().embed_texts(req.input)
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+    return {
+        "data": [
+            {"embedding": vecs[i].tolist(), "index": i, "dim": int(vecs.shape[1])}
+            for i in range(len(vecs))
+        ],
+        "model": req.model or "winnex-ai-normalize",
+        "normalized": True,
     }
 
 

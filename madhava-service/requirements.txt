@@ -1,7 +1,10 @@
-# madhava-service — ponte Madhava -> Liferay
-# winnex-madhava >=1.9.1 (witness certificate) depende APENAS de numpy (verificado no pyproject).
-# O motor NÃO faz embedding de texto; recebe vetores float32 prontos.
-winnex-madhava>=1.9.1
+# madhava-service — Madhava Bridge -> Liferay
+# Consumes winnex-tracer (unified tracer family: core + med domain) and the
+# winnex-madhava C++20 engine from PyPI. The commitment + WORM evidence chain
+# come from the shared package.
+winnex-tracer[med,all]>=1.0.0
+winnex-madhava>=1.9.2
+winnex-ai-normalize[all]>=1.0.1
 fastapi>=0.100
 uvicorn>=0.20
 numpy>=1.24

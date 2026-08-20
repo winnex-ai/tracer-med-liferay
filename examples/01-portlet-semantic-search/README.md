@@ -318,4 +318,90 @@ tail -f /opt/liferay/logs/liferay.*.log | grep STARTED
 
 ---
 
+## Step 5 -- Embedding provider form (winnex-ai-normalize)
+
+The Madhava engine is **agnostic** (consumes float32 vectors). To feed it
+text from Liferay, the portlet registers an **embedding provider** via the
+normalizer API (`winnex-ai-normalize`, secure + fail-closed). Add this form
+to `view.jsp`:
+
+```jsp
+<%-- Provider registration form (admin). Calls the normalizer API. --%>
+<portlet:actionURL name="registerProvider" var="registerProviderURL" />
+<form action="<%=registerProviderURL%>" method="post" class="winnex-provider-form">
+  <h3>Embedding provider</h3>
+  <div>
+    <label>Name</label>
+    <input name="providerName" value="qwen3" />
+  </div>
+  <div>
+    <label>Base URL</label>
+    <input name="baseUrl" value="http://winnex-embedding:8102" />
+  </div>
+  <div>
+    <label>Model</label>
+    <input name="model" value="BAAI/bge-m3" />
+  </div>
+  <div>
+    <label>Dimension</label>
+    <input name="dim" value="1024" type="number" />
+  </div>
+  <div>
+    <label>Priority (failover order)</label>
+    <input name="priority" value="1" type="number" />
+  </div>
+  <button type="submit">Register provider</button>
+</form>
+```
+
+### The action command (registers via the normalizer API)
+
+```java
+/**
+ * ProviderRegisterMVCActionCommand — the Liferay form submits the provider
+ * fields; the command calls the normalizer API to register it.
+ */
+@Component(
+    property = {
+        "javax.portlet.name=" + SearchPortletKeys.SEARCH_PORTLET,
+        "mvc.command.name=registerProvider"
+    },
+    service = MVCActionCommand.class
+)
+public class ProviderRegisterMVCActionCommand implements MVCActionCommand {
+
+    @Override
+    public boolean processAction(ActionRequest request, ActionResponse response) {
+        String name = ParamUtil.getString(request, "providerName", "qwen3");
+        String baseUrl = ParamUtil.getString(request, "baseUrl", "");
+        String model = ParamUtil.getString(request, "model", "");
+        int dim = ParamUtil.getInteger(request, "dim", 1024);
+        int priority = ParamUtil.getInteger(request, "priority", 1);
+
+        // POST /v1/normalize/providers (admin key from the environment)
+        //   {"name": name, "base_url": baseUrl, "model": model,
+        //    "dim": dim, "priority": priority}
+        // The normalizer stores it securely (api_key never persisted) and
+        // rebuilds the failover order. Then /v1/normalize/embed serves text.
+        _registerProvider(name, baseUrl, model, dim, priority);
+        return true;
+    }
+}
+```
+
+### The flow (end-to-end)
+
+```
+Liferay form (view.jsp)
+  └─ registerProvider action ──► POST /v1/normalize/providers
+                                     (admin key, fail-closed)
+  └─ search ──► /v1/normalize/embed {input: [text]}  → float32 vectors
+                 └─► winnex-madhava (agnostic) → top-K + proof
+```
+
+The same provider contract works for **any consumer** (Liferay, Maestro,
+tracer) — it is a secure, integration-friendly REST API.
+
+---
+
 *Winnex AI -- BSL 1.1 . pay@winnex.ai . CNPJ 58.364.637/0001-47*
