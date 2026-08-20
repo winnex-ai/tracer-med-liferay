@@ -1,7 +1,7 @@
 """
 Tracer-MED x Liferay -- Madhava Bridge Service
 ==============================================
-HTTP service that exposes the `winnex-madhava` engine (C++20, v1.8.8) to
+HTTP service that exposes the `winnex-madhava` engine (C++20, v1.9.1) to
 the Liferay OSGi bridge (winnex-madhava-service).
 
 The engine contract (verified against the real package):
@@ -192,7 +192,25 @@ def search(req: SearchRequest):
     q = np.ascontiguousarray(np.array(req.query, dtype=np.float32))
 
     t0 = time.time()
-    r = engine.search(q)
+    # Use the motor's witness audit (winnex-madhava >= 1.9.1) so the response
+    # carries the per-document Cauchy-Schwarz certificate — the proof that
+    # every excluded doc is mathematically outside the exact top-K. The
+    # certificate is the motor's own pruning decision (captured at decision
+    # time), not a recomputed one.
+    if hasattr(engine, "search_audited"):
+        ar = engine.search_audited(q, k=req.k, max_audit_records=500)
+        r = type("R", (), {
+            "indices": ar["indices"],
+            "bound_violations": ar["bound_violations"],
+            "bound_pairs": ar["bound_pairs"],
+            "k1": None, "k2": None, "k3": None,
+            "audit_excluded": ar["audit_excluded"],
+            "audit": ar["audit"],
+        })()
+    else:
+        r = engine.search(q)
+        r.audit_excluded = 0
+        r.audit = []
     latency_ms = (time.time() - t0) * 1000
 
     results = []
@@ -213,10 +231,25 @@ def search(req: SearchRequest):
         "results": results,
         "bound_violations": int(r.bound_violations),
         "bound_pairs": int(r.bound_pairs),
-        "k1": int(r.k1),
-        "k2": int(r.k2),
-        "k3": int(r.k3),
+        "k1": int(r.k1) if r.k1 is not None else None,
+        "k2": int(r.k2) if r.k2 is not None else None,
+        "k3": int(r.k3) if r.k3 is not None else None,
         "sound": int(r.bound_violations) == 0,
+        "audit_excluded": int(r.audit_excluded),
+        # The per-document mathematical certificate (winnex-madhava >= 1.9.1).
+        "audit": [
+            {
+                "doc_id": int(rec["doc_id"]),
+                "true_cosine": float(rec["true_cosine"]),
+                "projected_cosine": float(rec["projected_cosine"]),
+                "residual_norm": float(rec["residual_norm"]),
+                "upper_bound": float(rec["upper_bound"]),
+                "threshold": float(rec["threshold"]),
+                "excluded": bool(rec["excluded"]),
+                "stage": str(rec["stage"]),
+            }
+            for rec in r.audit
+        ],
         "engine": "winnex-madhava " + getattr(wm, "__version__", "?"),
         "latency_ms": round(latency_ms, 3),
         "tenant_id": req.tenant_id,
