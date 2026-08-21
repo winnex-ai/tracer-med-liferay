@@ -1,29 +1,38 @@
-# Tracer-MED × Liferay -- Compose base (Fase 1)
+# Tracer-MED × Tracer-GOV × Liferay -- Compose base (Fase 1)
 # Liferay CE 7.4 + Postgres 16. O serviço de ponte Madhava entra na Fase 2.
 #
 # Uso:
-#   docker compose -f liferay/docker-compose.yml up -d
+#   docker compose -f liferay/docker-compose.yml up -d --build
 #   # aguardar ~1-3 min na primeira subida (initial build + portal)
 #   curl -I http://localhost:8080
 #
 # Dados persistentes em liferay/volumes/ (fora do container).
+# Os bundles Winnex (Tracer-MED + Tracer-GOV) são instalados via Dockerfile
+# (liferay/docker/Dockerfile) — NÃO copiados manualmente.
 
 services:
   liferay:
-    image: liferay/portal:7.4.3.132-ga132
+    build:
+      context: ./docker
+      dockerfile: Dockerfile
+    image: tracer-liferay:1.0.0
     container_name: tracer-med-liferay
     ports:
       - "8080:8080"
     environment:
       # Memória (RAM disponível: 28GB)
       CATALINA_OPTS: "-Xms1g -Xmx3g -XX:MaxMetaspaceSize=1g"
+      # Serviço de embeddings (winnex-ai-normalize) alcançado via o gateway do
+      # host Docker — o container Liferay não está na mesma rede do normalize.
+      # Os portlets Tracer-MED/GOV embutem a query aqui (P1.5).
+      NORMALIZE_SERVICE_URL: "http://172.17.0.1:8103"
     volumes:
       # Padrão oficial da imagem: /mnt/liferay/files/* é copiado para
       # /opt/liferay ANTES do portal iniciar. O portal-ext.properties
       # (JDBC Postgres) está em ./files/.
       - ./files:/mnt/liferay/files:ro
-      # Deploy automático de módulos OSGi (jar/war) -- Fase 3
-      - ./volumes/deploy:/opt/liferay/deploy
+      # NOTA: os bundles Winnex (Tracer-MED + Tracer-GOV) são instalados via
+      # Dockerfile em /opt/liferay/deploy — NÃO sobrescrever com bind mount.
       # Dados persistentes (osgi, tomcat, log)
       - ./volumes/data:/opt/liferay/data
     depends_on:
@@ -65,6 +74,11 @@ services:
       - ../madhava-service/.env
     environment:
       TRACER_MED_EVIDENCE_PATH: /var/lib/tracer-med/evidence
+    # O provider de embeddings (bge-m3 local no host :8102) é alcançado via
+    # host.docker.internal — sem isto o madhava-service não resolve o sglang
+    # e o embed de query falha (EmbeddingService: ALL providers unavailable).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - madhava-evidence:/var/lib/tracer-med/evidence
     healthcheck:

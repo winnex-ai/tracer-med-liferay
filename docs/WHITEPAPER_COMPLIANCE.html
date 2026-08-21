@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Whitepaper de Conformidade — Tracer-MED | Winnex AI</title>
+<style>
+  :root {
+    --winnex-blue: #1a56db;
+    --winnex-dark: #0f2540;
+    --winnex-accent: #0e9f6e;
+    --ink: #1f2937;
+    --muted: #6b7280;
+    --line: #e5e7eb;
+    --bg-soft: #f9fafb;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: var(--ink);
+    line-height: 1.6;
+    background: var(--bg-soft);
+    padding: 2rem 1rem;
+  }
+  .paper {
+    max-width: 860px;
+    margin: 0 auto;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 2.5rem 3rem;
+    box-shadow: 0 2px 12px rgba(15,37,64,.06);
+  }
+  header { border-bottom: 3px solid var(--winnex-blue); padding-bottom: 1.25rem; margin-bottom: 1.75rem; }
+  .brand { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+  .brand img { height: 40px; }
+  .brand .tagline { font-size: .85rem; color: var(--muted); text-align: right; }
+  .doc-badge {
+    display: inline-block; background: var(--winnex-blue); color: #fff;
+    font-size: .7rem; letter-spacing: .08em; text-transform: uppercase;
+    padding: .2rem .6rem; border-radius: 4px; margin-bottom: .75rem;
+  }
+  h1 { font-size: 1.7rem; color: var(--winnex-dark); line-height: 1.25; margin-bottom: .5rem; }
+  .subtitle { color: var(--muted); font-size: 1rem; }
+  .meta {
+    display: flex; gap: 1.5rem; flex-wrap: wrap; margin-top: 1rem;
+    font-size: .8rem; color: var(--muted);
+  }
+  .meta span b { color: var(--ink); }
+  h2 { font-size: 1.15rem; color: var(--winnex-dark); margin: 1.75rem 0 .75rem; }
+  h3 { font-size: 1rem; color: var(--winnex-dark); margin: 1.25rem 0 .5rem; }
+  p { margin-bottom: .75rem; }
+  ul, ol { margin: 0 0 .75rem 1.4rem; }
+  li { margin-bottom: .35rem; }
+  .callout {
+    background: #eef4ff; border-left: 4px solid var(--winnex-blue);
+    padding: .75rem 1rem; border-radius: 0 6px 6px 0; margin: 1rem 0;
+  }
+  .callout.green { background: #ecfdf5; border-left-color: var(--winnex-accent); }
+  table { width: 100%; border-collapse: collapse; margin: .75rem 0 1.25rem; font-size: .88rem; }
+  th, td { text-align: left; padding: .55rem .7rem; border: 1px solid var(--line); vertical-align: top; }
+  th { background: var(--winnex-dark); color: #fff; font-weight: 600; }
+  tr:nth-child(even) td { background: var(--bg-soft); }
+  code {
+    background: #f3f4f6; border: 1px solid var(--line); border-radius: 4px;
+    padding: .05rem .35rem; font-size: .82em; font-family: "Cascadia Code", Consolas, monospace;
+  }
+  .mapping-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0; }
+  .mapping-card { border: 1px solid var(--line); border-radius: 8px; padding: 1rem 1.1rem; background: #fff; }
+  .mapping-card h3 { margin-top: 0; }
+  .mapping-card .req { color: var(--muted); font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; }
+  .mapping-card .how { color: var(--winnex-accent); font-weight: 600; font-size: .82rem; margin-top: .5rem; }
+  footer {
+    margin-top: 2rem; padding-top: 1.25rem; border-top: 1px solid var(--line);
+    font-size: .78rem; color: var(--muted); display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap;
+  }
+  footer .cta { text-align: right; }
+  footer a { color: var(--winnex-blue); text-decoration: none; font-weight: 600; }
+  .print-only { display: none; }
+  @media print {
+    body { background: #fff; padding: 0; }
+    .paper { border: none; box-shadow: none; max-width: 100%; padding: 1rem 1.5rem; }
+    .no-print { display: none; }
+    .print-only { display: block; }
+    .mapping-grid { grid-template-columns: 1fr; }
+    h1 { font-size: 1.4rem; }
+  }
+</style>
+</head>
+<body>
+<div class="paper">
+
+  <header>
+    <div class="brand">
+      <img src="https://winnex.ai/logo-petit_white.webp" alt="Winnex AI">
+      <div class="tagline">Replace probability with proof,<br>in the service of health.</div>
+    </div>
+    <div class="doc-badge">Whitepaper de Conformidade</div>
+    <h1>Do recurso técnico à evidência de auditoria:<br>como <code>bound_violations = 0</code> atende ANVISA e HIPAA</h1>
+    <p class="subtitle">Como a garantia matemática do Tracer-MED se traduz em evidência utilizável em auditorias regulatórias de saúde — um guia técnico-comercial para parceiros e implementadores.</p>
+    <div class="meta">
+      <span>Produto: <b>Tracer-MED for Liferay</b></span>
+      <span>Motor: <b>Winnex Madhava 1.8.8</b></span>
+      <span>Versão: <b>1.0</b></span>
+      <span>Contato: <b>info@winnex.ai</b></span>
+    </div>
+  </header>
+
+  <h2>1. O que este documento faz</h2>
+  <p>
+    Este whitepaper mapeia — linha a linha — como a saída técnica do Tracer-MED
+    (a prova de completude da busca, expressa por <code>bound_violations = 0</code>)
+    responde a requisitos objetivos de auditoria da <b>ANVISA</b> (contexto
+    brasileiro, incluindo LGPD e RDCs aplicáveis) e da <b>HIPAA</b> (contexto
+    americano, 45 CFR Part 164). O objetivo é transformar uma garantia
+    matemática em um argumento de venda concreto para parceiros que precisam
+    justificar investimento em busca semântica regulada.
+  </p>
+  <div class="callout">
+    <b>Leitura honesta (importante para a venda):</b> o Tracer-MED <b>não é um
+    dispositivo médico</b> e os relatórios de conformidade são
+    <b>modelos de autoavaliação</b>, não certificações. A prova de
+    <code>bound_violations = 0</code> é a <b>base técnica</b> que torna esses
+    relatórios significativos: ela prova que a busca não perdeu registros
+    relevantes — e cada triagem fica registrada em trilha de auditoria
+    consultável (ver seção 4). A responsabilidade final pela conformidade
+    permanece da instituição.
+  </div>
+
+  <h2>2. O que exatamente significa <code>bound_violations = 0</code></h2>
+  <p>
+    Para cada consulta, o motor Madhava calcula, para cada documento, um
+    <b>limite superior</b> pela <b>desigualdade de Cauchy-Schwarz</b>. Se o
+    limite provar que o documento não pode estar no top-K, ele é excluído
+    <b>com prova</b> — nunca por heurística ou probabilidade. O contrato de
+    entrada é um vetor <code>float32</code> de norma unitária (o motor não
+    processa texto bruto; os embeddings são gerados fora do motor).
+  </p>
+  <ul>
+    <li><code>bound_violations = 0</code> → <b>garantia de completude</b>: nenhum registro relevante foi perdido nesta triagem.</li>
+    <li><code>bound_pairs = N</code> → quantidade de pares (documento, limite) avaliados — o <b>tamanho do registro de auditoria</b> desta consulta.</li>
+    <li><code>sound = true</code> → a mesma garantia como flag booleana de conveniência.</li>
+    <li><code>pruned_by_bound</code> → documentos descartados <b>com prova</b> (diferente do <code>pruned_by_prefilter</code>, que é heurística de latência).</li>
+  </ul>
+  <div class="callout green">
+    <b>Ponto de venda:</b> "Provado por desigualdade matemática, não por amostragem" é
+    uma frase que auditorias de saúde conseguem entender e registrar. A garantia
+    não depende de "confiar no algoritmo" — ela é verificável a posteriori por
+    qualquer parte.
+  </div>
+
+  <h2>3. Mapeamento para requisitos de auditoria</h2>
+  <p>
+    A tabela abaixo traduz cada requisito regulatório em <b>o que o auditor
+    pede</b> e <b>como o Tracer-MED entrega</b>. Este é o núcleo de venda do
+    whitepaper: cada linha é um argumento pronto para reunião de parceiro.
+  </p>
+
+  <h3>3.1 ANVISA — contexto brasileiro (LGPD + RDCs)</h3>
+  <div class="mapping-grid">
+    <div class="mapping-card">
+      <div class="req">LGPD · Art. 20</div>
+      <h3>Revisão de decisões automatizadas</h3>
+      <p>O titular tem direito de solicitar revisão de decisões tomadas com base em tratamento automatizado de dados pessoais.</p>
+      <p class="how">Como o Tracer-MED atende: cada triagem retorna a prova <code>bound_violations = 0</code> e fica persistida com <code>boundPairs</code>, <code>sound</code>, <code>engine</code>, <code>latencyMs</code> e <code>resultJson</code> (Exemplo 04). O titular/auditor pode reconstruir <i>o que foi buscado, quando e com que garantia</i>.</p>
+    </div>
+    <div class="mapping-card">
+      <div class="req">LGPD · Art. 5 II e Art. 11</div>
+      <h3>Dados sensíveis de saúde</h3>
+      <p>Dados de saúde são sensíveis; exigem base legal, finalidade específica e minimização.</p>
+      <p class="how">Como o Tracer-MED atende: a garantia de completude evita "silencio por perda de registro", reduzindo o risco de decisão clínica baseada em recuperação incompleta. A trilha de auditoria registra finalidade e operador (metadados de triagem) — documentação de responsabilidade.</p>
+    </div>
+    <div class="mapping-card">
+      <div class="req">RDC 585/2021 · Boas Práticas (softwares de saúde)</div>
+      <h3>Rastreabilidade e verificação de software</h3>
+      <p>Exige documentação de ciclo de vida, verificação e rastreabilidade de decisões do software.</p>
+      <p class="how">Como o Tracer-MED atende: o certificado QR (Exemplo 07) e o <code>qr_projection_hash</code> permitem validar <i>a posteriori</i> que uma triagem foi processada pelo Madhava 1.8.8 com garantias matemáticas intactas — um elemento de verificação demonstrável.</p>
+    </div>
+    <div class="mapping-card">
+      <div class="req">RDC 830/2023 · LGPD em produtos de saúde</div>
+      <h3>Transparência no tratamento de dados</h3>
+      <p>Amplia a aplicação da LGPD no setor de saúde, reforçando transparência e prestação de contas.</p>
+      <p class="how">Como o Tracer-MED atende: a trilha de auditoria consultável + relatórios de autoavaliação LGPD/GDPR/HIPAA são a camada de transparência. A garantia matemática torna o "prestação de contas" verificável, não declarativo.</p>
+    </div>
+  </div>
+
+  <h3>3.2 HIPAA — contexto americano (45 CFR Part 164)</h3>
+  <div class="mapping-grid">
+    <div class="mapping-card">
+      <div class="req">164.308(a)(1)(ii)(D)</div>
+      <h3>Information System Activity Review</h3>
+      <p>Revisão periódica dos registros de atividade dos sistemas de informação que contêm ePHI.</p>
+      <p class="how">Como o Tracer-MED atende: cada triagem gera um registro de auditoria persistido (quem, quando, query, prova). A trilha é consultável por tenant e por estado <code>sound</code> — matéria-prima direta para a revisão periódica exigida.</p>
+    </div>
+    <div class="mapping-card">
+      <div class="req">164.312(b) · Audit Controls</div>
+      <h3>Controles de auditoria em hardware, software e procedimentos</h3>
+      <p>Registrar e examinar a atividade nos sistemas que usam ou acessam ePHI.</p>
+      <p class="how">Como o Tracer-MED atende: persistência de auditoria (Exemplo 04) com <code>companyId</code>, <code>userId</code>, <code>tenantId</code>, query, filtros e a prova completa. O <code>engine</code> e a versão ficam gravados — auditabilidade de ponta a ponta.</p>
+    </div>
+    <div class="mapping-card">
+      <div class="req">164.312(e)(1) · Integrity</div>
+      <h3>Proteger ePHI contra alteração ou destruição imprópria</h3>
+      <p>Mecanismos para garantir que ePHI não tenha sido alterada ou destruída indevidamente.</p>
+      <p class="how">Como o Tracer-MED atende: o certificado QR valida apenas o <b>hash matemático</b> e metadados — <b>não expõe dados do paciente</b>. A verificação confirma que a prova não foi adulterada, reforçando integridade sem vazar ePHI.</p>
+    </div>
+    <div class="mapping-card">
+      <div class="req">164.514 · De-identification</div>
+      <h3>Desidentificação de informações de saúde</h3>
+      <p>Reduzir o risco de reidentificação ao usar dados para pesquisa/análise.</p>
+      <p class="how">Como o Tracer-MED atende: o motor indexa <b>vetores float32</b>, não texto bruto — e a trilha guarda metadados de auditoria, não payloads sensíveis. A superfície de exposição de ePHI é estruturalmente menor.</p>
+    </div>
+  </div>
+
+  <h2>4. A trilha de auditoria: o que fica gravado</h2>
+  <p>
+    O Exemplo 04 (persistência via Service Builder) grava, para cada triagem,
+    os campos que o auditor precisa ver:
+  </p>
+  <table>
+    <thead>
+      <tr><th>Campo</th><th>Exemplo</th><th>Uso em auditoria</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>boundViolations</code></td><td><code>0</code></td><td>Garantia de completude — o coração da evidência</td></tr>
+      <tr><td><code>boundPairs</code></td><td><code>8</code></td><td>Tamanho do registro de auditoria desta consulta</td></tr>
+      <tr><td><code>sound</code></td><td><code>true</code></td><td>Flag de conveniência para consulta e filtro</td></tr>
+      <tr><td><code>engine</code></td><td><code>winnex-madhava 1.8.8</code></td><td>Versão exata que produziu a prova</td></tr>
+      <tr><td><code>latencyMs</code></td><td><code>3.2</code></td><td>Metadado operacional de desempenho</td></tr>
+      <tr><td><code>tenantId / companyId / userId</code></td><td><code>liferay-1001</code></td><td>Quem buscou, em qual tenant isolado</td></tr>
+      <tr><td><code>query / cid10 / department / k</code></td><td><code>hypertension management</code></td><td>O que foi buscado e com quais filtros</td></tr>
+      <tr><td><code>resultJson</code></td><td><code>{...top docs...}</code></td><td>Resultado top-K da triagem (preview)</td></tr>
+    </tbody>
+  </table>
+  <p>
+    Somado a isso, o Exemplo 07 emite o <b>Certificado de Auditoria Matemática</b>
+    (PDF/modal + QR Code apontando para o endpoint de verificação), permitindo
+    validação independente da integridade da prova — sem expor dados clínicos.
+  </p>
+
+  <h2>5. Como usar este documento na venda (para parceiros)</h2>
+  <ol>
+    <li><b>Abra a conversa pela dor regulatória</b>: "como sua instituição prova que a busca clínica não perdeu um registro relevante?" — não comece pela matemática, comece pelo risco.</li>
+    <li><b>Traduza a prova em evidência</b>: apresente a tabela da seção 3. Cada linha conecta um requisito (ANVISA/HIPAA) ao campo que o Tracer-MED grava.</li>
+    <li><b>Demonstre a trilha ao vivo</b>: rode o exemplo 04 e mostre o registro persistido com <code>boundViolations = 0</code> — o auditor vê a mesma tela.</li>
+    <li><b>Mostre o certificado QR</b>: verificação a posteriori é um diferencial difícil de copiar; aponte que valida o hash sem expor ePHI.</li>
+    <li><b>Enquadre a honestidade como credibilidade</b>: o Tracer-MED é autoavaliação, não certificação — ser explícito sobre isso constrói confiança e evita objeção do compliance do cliente.</li>
+    <li><b>Escalone para a família de produtos</b>: o mesmo motor Madhava está disponível via plug de API compatível com OpenAI e stack de inferência gerenciada — projetos fora do Liferay também usam a garantia.</li>
+  </ol>
+
+  <h2>6. Sobre a Winnex e os limites deste documento</h2>
+  <p>
+    A <b>Winnex AI</b> (Winnex Brasil Soluções Empresariais LTDA — CNPJ
+    58.364.637/0001-47) desenvolve o motor <b>Winnex Madhava</b> e as soluções
+    Tracer (MED e GOV) para Liferay. A garantia <code>bound_violations = 0</code>
+    é <b>completude da busca</b>: ela não afirma que o top-K é a resposta certa,
+    nem substitui julgamento clínico. Relevância depende do modelo de embedding
+    usado na ingestão — e é exatamente essa etapa de integração (seleção de
+    modelo, pipeline de inferência, orquestração RAG) que a Winnex implementa
+    sob contrato. Os relatórios de conformidade são <b>modelos de
+    autoavaliação</b>, não certificações emitidas por órgãos reguladores.
+  </p>
+  <div class="callout green">
+    <b>Próximo passo para parceiros:</b> para orçamento de implementação de
+    inferência ou RAG, envie e-mail para <b>info@winnex.ai</b> informando formato
+    e volume dos dados e o contexto regulatório da instituição. Teremos o prazer
+    de dimensionar a integração e apoiar sua apresentação ao cliente.
+  </div>
+
+  <footer>
+    <div>
+      Winnex AI — "Replace probability with proof, in the service of health."<br>
+      BSL 1.1 · info@winnex.ai · Winnex Brasil Soluções Empresariais LTDA (CNPJ 58.364.637/0001-47)
+    </div>
+    <div class="cta">
+      <a href="mailto:info@winnex.ai">info@winnex.ai</a><br>
+      <a href="https://winnex.ai">winnex.ai</a>
+    </div>
+  </footer>
+
+</div>
+</body>
+</html>

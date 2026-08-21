@@ -169,9 +169,16 @@ Standard Liferay sign-in. Default demo admin: `test@liferay.com` / `test`.
 ![Tracer-MED Portlet Results](docs/screenshots/02-tracermed-portlet-results.png)
 
 The portlet shows: the clinical query form (query + ICD-10 + department
-filters), the **sound proof** banner (0 bound violations), the audit block
-(tenant_id, bound_violations, bound_pairs, sound, engine, latency_ms) and the
-results table.
+filters), the **sound proof** banner (0 bound violations, no relevant record
+lost), the bound pairs evaluated, the engine, and the ranked results table
+(external ID + preview).
+
+### Tracer-MED portlet in edit mode
+
+![Tracer-MED Edit Mode](docs/screenshots/03-tracermed-edit-mode.png)
+
+The portlet can be added to any page from the Liferay widget panel under
+**Winnex → Tracer-MED**.
 
 ---
 
@@ -295,16 +302,17 @@ these reports meaningful.
 
 ## Usage examples
 
-Real, ready-to-use implementations (in English) live in the `examples/`
-directory. If you are a developer integrating Tracer-MED, start here:
+Reference patterns (in English) live in the `examples/` directory. Each one
+shows, with code snippets, how a specific integration is done. If you are a
+developer integrating Tracer-MED, start here:
 
-| # | Example | What it does |
+| # | Example | What it shows |
 |---|---|---|
 | [01](examples/01-portlet-semantic-search/README.md) | Portlet semantic search | The production portlet: search clinical records with proof and filters. |
 | [02](examples/02-rest-resource/README.md) | REST API | Expose `/o/rest/tracer-med/*` for any front-end or integration. |
 | [03](examples/03-scheduler/README.md) | Auto-index scheduler | Keep a tenant's index fresh automatically (ingestion). |
 | [04](examples/04-service-builder/README.md) | Audit persistence | Save every triage (query + proof) in the Liferay database. |
-| [05](examples/05-standalone-client/README.md) | Standalone client | A pure-Java client to the engine (the contract of the bridge). |
+| [05](examples/05-standalone-client/README.md) | Standalone client | A pure-Java HTTP client to the engine (the contract of the bridge). |
 | [07](examples/07-qr-certificate/README.md) | QR-code certificate | Emit a scannable Mathematical Audit Certificate. |
 | [scripts](examples/scripts/README.md) | Live demo | cURL end-to-end: health -> index -> search with proof. |
 

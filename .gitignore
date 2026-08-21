@@ -20,6 +20,7 @@ out/
 
 # ---- Liferay volumes (runtime data) ----
 liferay/volumes/data/
+liferay/volumes/deploy/
 liferay/volumes/deploy/*.jar
 liferay/volumes/deploy/*.lpkg
 
