@@ -9,7 +9,7 @@ COPY src/ /app/src/
 COPY requirements.txt /app/requirements.txt
 
 RUN pip install --no-cache-dir --force-reinstall -r /app/requirements.txt
-RUN pip install --no-cache-dir --force-reinstall "winnex-madhava==1.9.2"
+RUN pip install --no-cache-dir --force-reinstall "winnex-madhava==1.9.3"
 
 ENV PYTHONPATH=/app/src
 EXPOSE 8600

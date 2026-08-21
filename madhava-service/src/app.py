@@ -17,13 +17,15 @@ Contact: pay@winnex.ai
 import logging
 import os
 import time
-from typing import Any, Dict, List
+from collections import OrderedDict
+from typing import Any, Dict, List, Union
 
 import numpy as np
 
 import winnex_madhava as wm
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 logging.basicConfig(level=logging.INFO)
@@ -101,10 +103,38 @@ class IndexRequest(BaseModel):
 
 
 class SearchRequest(BaseModel):
-    query: List[float]
+    query: Union[List[float], str, None] = None
+    query_text: str = ""
     k: int = 10
     metadata_filter: Dict[str, Any] = {}
     tenant_id: str = "default"
+
+    def resolve_query_vector(self) -> List[float]:
+        """Accept the query as an already-embedded vector OR as raw text.
+
+        The Liferay OSGi bridge (MadhavaSearchRequest) sends `query` as a
+        STRING (text). The CLI/e2e sends `query` as a float32 vector. This
+        adapter embeds the text through winnex-ai-normalize when a text form
+        is used, so both consumers speak the same contract.
+        """
+        if isinstance(self.query, list) and self.query:
+            return self.query
+        text = ""
+        if isinstance(self.query, str):
+            text = self.query
+        elif self.query_text:
+            text = self.query_text
+        if text.strip():
+            key = text.strip()
+            cached = _query_cache_get(key)
+            if cached is not None:
+                return cached
+            from winnex_ai_normalize.core.embedding import get_embedding_service
+            vec = get_embedding_service().embed_texts([key])
+            out = vec[0].tolist()
+            _query_cache_put(key, out)
+            return out
+        raise ValueError("query (vector) or query_text (string) is required")
 
 
 # ---------------------------------------------------------------------------
@@ -112,6 +142,32 @@ class SearchRequest(BaseModel):
 # ---------------------------------------------------------------------------
 _engines: Dict[str, Any] = {}
 _corpora: Dict[str, List[VectorDoc]] = {}
+
+
+# Bounded LRU for query-text → vector. The embedding round-trip is ~80 ms
+# (~800× the motor's search cost), so caching normalized query text avoids
+# re-embedding repeated queries (Gargalo #1/#3). Corpus vectors are NOT cached
+# here — they are already embedded at /v1/index time (VectorDoc.vector).
+_QUERY_CACHE_MAX = 256
+_query_cache: "OrderedDict[str, List[float]]" = {}
+
+
+def _query_cache_get(text: str):
+    global _query_cache
+    v = _query_cache.get(text)
+    if v is not None:
+        # refresh LRU position
+        _query_cache.pop(text)
+        _query_cache[text] = v
+        return v
+    return None
+
+
+def _query_cache_put(text: str, vec: List[float]):
+    global _query_cache
+    _query_cache[text] = vec
+    while len(_query_cache) > _QUERY_CACHE_MAX:
+        _query_cache.popitem(last=False)
 
 
 # ---------------------------------------------------------------------------
@@ -159,6 +215,12 @@ def index(req: IndexRequest):
         stage2_dim=min(req.stage2_dim, dim),
         k=req.k,
         k1_fraction=0.05,
+        # Bounded Stage-2 survivors: with postfilter=True the motor computes
+        # exact scores for every survivor, so k2 must not grow to ~50k on
+        # large corpora (Gargalo #2). 500 keeps recall high while bounding
+        # post-filter cost. Configurable via env for tuning without rebuild.
+        k2_fraction=float(os.environ.get("MADHAVA_K2_FRACTION", "0.005")),
+        k2_max=int(os.environ.get("MADHAVA_K2_MAX", "500")),
         modulation=True,
         postfilter=True,
         normalize_input=True,
@@ -189,7 +251,12 @@ def search(req: SearchRequest):
     engine = _engines[req.tenant_id]
     corpus = _corpora[req.tenant_id]
 
-    q = np.ascontiguousarray(np.array(req.query, dtype=np.float32))
+    # Resolve the query vector (already-embedded OR text→embed via normalizer).
+    try:
+        qv = req.resolve_query_vector()
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    q = np.ascontiguousarray(np.array(qv, dtype=np.float32))
 
     t0 = time.time()
     # PRODUCTION path (winnex-tracer >= 1.0.0 + winnex-madhava >= 1.9.2):
