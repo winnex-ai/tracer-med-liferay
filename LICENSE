@@ -1,0 +1,45 @@
+Business Source License 1.1 (BSL 1.1)
+======================================================================
+
+Copyright (c) 2026 Winnex AI — Winnex Brasil Solucoes Empresariais LTDA
+(CNPJ 58.364.637/0001-47)
+Contact: pay@winnex.ai | Website: https://winnex.ai
+
+Licensed Work: Tracer-MED for Liferay
+The Licensed Work is © 2026 Winnex Brasil Solucoes Empresariais LTDA.
+
+Additional Use Grant: Free for Brazilian public healthcare institutions.
+Any use by a public sector healthcare entity in Brazil is permitted,
+including production use for clinical triage. Commercial distribution
+through the Liferay Marketplace is governed by the Winnex Commercial EULA
+(see EULA.md) — the commercial grant authorizes the End User to run the
+Licensed Work for its own internal clinical retrieval (not as a third-party
+hosted Search Service).
+
+Change Date: 2036-01-01
+Change License: GNU General Public License v2.0 or later (GPL-2.0-or-later)
+
+For inquiries: pay@winnex.ai
+
+----------------------------------------------------------------------
+
+Business Source License 1.1 Terms
+
+The Licensor hereby grants you the right to copy, modify, create derivative
+works, redistribute, and make non-production use of the Licensed Work. The
+Licensor may make an Additional Use Grant, above, permitting limited
+production use.
+
+Effective on the Change Date, or the fourth anniversary of the first
+publicly available distribution of a specific version of the Licensed Work
+under this license, whichever comes first, the Licensed Work will be made
+available under the terms of the Change License, or in the absence of a
+Change License, the GNU General Public License version 2.0 or later.
+
+The Business Source License (this document) is not an Open Source license.
+https://www.mariadb.com/bsl11/
+https://opensource.org/license/bsl-1-1/
+
+You are granted the right to copy, modify, create derivative works,
+redistribute, and make non-production use of the Licensed Work, subject to
+the Additional Use Grant, and the Change License described above.

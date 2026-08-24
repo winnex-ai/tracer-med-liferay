@@ -19,9 +19,11 @@ License: **Business Source License 1.1 (BSL 1.1)**
 |---|---|---|
 | **Distribution package (.lpkg)** | `dist/tracer-med-1.0.0.lpkg` | YES (validated) |
 | **Marketplace metadata** | embedded in the .lpkg | YES |
-| **License file (BSL 1.1)** | inside the .lpkg | YES |
+| **License file (BSL 1.1)** | `LICENSE` (inside the .lpkg) | YES |
+| **End User License Agreement** | `EULA.md` (inside the .lpkg) | YES |
+| **Third-party notices** | `THIRD_PARTY_NOTICES.md` (inside the .lpkg) | YES |
 | **Logo** | `https://winnex.ai/logo-petit_white.webp` | YES |
-| **Screenshots** | `docs/screenshots/*.png` (6) | YES |
+| **Screenshots** | `docs/screenshots/*.png` | YES |
 | **Source repository** | `https://github.com/winnex-ai/tracer-med-liferay` | YES (published) |
 
 ---
@@ -33,6 +35,8 @@ The `.lpkg` contains exactly:
 ```
 dist/tracer-med-1.0.0.lpkg
 +-- LICENSE                          (BSL 1.1)
++-- EULA.md                          (Winnex Commercial EULA, worldwide)
++-- THIRD_PARTY_NOTICES.md           (OSS attribution)
 +-- com.winnex.madhava.api-1.0.0.jar        (Bundle-SymbolicName com.winnex.madhava.api)
 +-- com.winnex.madhava.service-1.0.0.jar    (Bundle-SymbolicName com.winnex.madhava.service)
 +-- com.winnex.tracermed-1.0.0.jar          (Bundle-SymbolicName com.winnex.tracermed)
@@ -41,7 +45,7 @@ dist/tracer-med-1.0.0.lpkg
 
 - **ZIP integrity**: verified OK.
 - **3 valid OSGi bundles**: verified (Bundle-SymbolicName / Bundle-Version present).
-- **No internal docs, prompts, secrets or .env files** in the package.
+- **No internal docs, prompts, secrets, .env files, or dev-only bundles** in the package.
 
 ---
 
@@ -57,7 +61,7 @@ Use these values when creating the listing in the seller portal.
 | **Long description** | Tracer-MED integrates the Winnex Madhava deterministic vector-search engine with Liferay DXP/Portal. Every search returns a per-document proof that no relevant clinical record was lost (0 bound violations). Multi-tenant by design (liferay-{companyId}), QR-code audit certificates, and LGPD/GDPR/HIPAA self-assessment reports. |
 | **Category** | Clinical / Healthcare |
 | **Tags** | clinical, triage, vector-search, proof, LGPD, HIPAA, GDPR, healthcare |
-| **License** | Business Source License 1.1 (BSL 1.1) |
+| **License** | Business Source License 1.1 (BSL 1.1) + Winnex Commercial EULA |
 | **Price** | (choose: Free trial / Paid license) - commercial use requires a Winnex license |
 | **Support URL** | https://winnex.ai |
 | **Contact** | pay@winnex.ai |
@@ -152,7 +156,26 @@ required-apps=
 
 ---
 
-## 8. Legal reminder
+## 8. Compliance checklist (Liferay Marketplace Developer Agreement)
+
+| Agreement clause | Requirement | Where covered |
+|---|---|---|
+| §5.2 | Deliver in Liferay-prescribed format; no hidden functionality | This guide + .lpkg; dev-only bundles excluded |
+| §5.5 | EULA with minimum clauses (a)–(e) | `EULA.md` Sections 1, 4, 5, 8, 9, 12, 14 |
+| §5.5(a) | EULA between Developer and End User, not Liferay | `EULA.md` Section 1 |
+| §5.5(b) | Liferay excluded from liability | `EULA.md` Section 4 |
+| §5.5(c) | Non-embargo / US restricted parties representation | `EULA.md` Section 9 |
+| §5.5(d) | Developer name + contact for claims | `EULA.md` Contact section |
+| §5.5(e) | Liferay as intended third-party beneficiary | `EULA.md` Section 4 |
+| §5.7 | OSS compliance + notices/offer for source | `THIRD_PARTY_NOTICES.md` |
+| §9.1 | Privacy/healthcare data compliance | `EULA.md` Section 5 |
+| §10 | Export compliance | `EULA.md` Section 9 |
+| §12 | Representations and warranties | `EULA.md` Sections 8, 9 |
+| §14 | Indemnification | `EULA.md` Sections 11, 12 |
+
+---
+
+## 9. Legal reminder
 
 - **Business Source License 1.1** - source-available, not OSI open-source.
 - Free for Brazilian government agencies (Additional Use Grant).

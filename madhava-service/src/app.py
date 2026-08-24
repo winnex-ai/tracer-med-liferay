@@ -1,7 +1,7 @@
 """
 Tracer-MED x Liferay -- Madhava Bridge Service
 ==============================================
-HTTP service that exposes the `winnex-madhava` engine (C++20, v1.9.1) to
+HTTP service that exposes the `winnex-madhava` engine (C++20, >= 1.9.2) to
 the Liferay OSGi bridge (winnex-madhava-service).
 
 The engine contract (verified against the real package):
@@ -44,7 +44,8 @@ app = FastAPI(
 # ---------------------------------------------------------------------------
 # In production, set MADHAVA_API_KEY in the environment (or a secret manager).
 # All /v1/* endpoints REQUIRE the header:  X-Winnex-Api-Key: <key>
-_API_KEY = os.environ.get("MADHAVA_API_KEY", "change-me-in-production")
+# Fail-closed: NO placeholder default (see tracer-gov app.py for the rationale).
+_API_KEY = os.environ.get("MADHAVA_API_KEY", "")
 
 
 def require_api_key(x_winnex_api_key: str = Header(default="", alias="X-Winnex-Api-Key")):
@@ -258,6 +259,19 @@ def search(req: SearchRequest):
         raise HTTPException(422, str(e))
     q = np.ascontiguousarray(np.array(qv, dtype=np.float32))
 
+    # Consistency check: the query dimension MUST match the corpus dimension.
+    # A query embedded with a different model/dim would produce results that
+    # are semantically wrong even with bound_violations == 0. Fail loudly
+    # (422) instead of searching with a mismatched vector.
+    corpus_dim = len(corpus[0].vector) if corpus else None
+    if (corpus_dim is not None) and (q.shape[0] != corpus_dim):
+        raise HTTPException(
+            422,
+            f"query dimension {q.shape[0]} does not match corpus dimension "
+            f"{corpus_dim} — embed the query with the same model used to "
+            f"index the corpus",
+        )
+
     t0 = time.time()
     # PRODUCTION path (winnex-tracer >= 1.0.0 + winnex-madhava >= 1.9.2):
     # the shared AuditCommitment — the motor returns a lightweight
@@ -265,29 +279,54 @@ def search(req: SearchRequest):
     # Ed25519 (make_worm_record), and the ~500-byte signed record is written
     # to the WORM evidence chain (TRACER_MED_EVIDENCE_PATH). No duplicated
     # commitment logic — it lives in the shared package.
-    from winnex_tracer.core import make_worm_record
+    #
+    # The signer is FAIL-CLOSED without WORM_SIGNING_PRIVATE_KEY_*: in that
+    # case we DEGRADE to the search_audited certificate path instead of
+    # failing the triage (the MED service may run without a signing key;
+    # the GOV service requires one). Mirrors winnex_tracer.med.core.clinical.
     from winnex_tracer.persistence import WormStorage
 
+    commitment_rec = None
+
     if hasattr(engine, "search_with_commitment"):
-        rec = make_worm_record(engine, q, k=req.k, max_sample=50,
-                               query_vector_bytes=q.tobytes())
-        r = type("R", (), {
-            "indices": rec["indices"],
-            "bound_violations": rec["bound_violations"],
-            "bound_pairs": rec["bound_pairs"],
-            "k1": None, "k2": None, "k3": None,
-            "audit_excluded": rec["total_provably_excluded"],
-            "audit": rec["sampled_records"],
-            "commitment": rec,
-        })()
-        # Write the signed commitment to the WORM evidence chain.
         try:
-            worm_path = os.environ.get(
-                "TRACER_MED_EVIDENCE_PATH", "/var/lib/tracer-med/evidence")
-            WormStorage(base_path=worm_path).append(
-                {"commitment": rec, "_ctx": {"tenant_id": req.tenant_id}})
+            from winnex_tracer.core import make_worm_record
+            rec = make_worm_record(engine, q, k=req.k, max_sample=50,
+                                   query_vector_bytes=q.tobytes())
+            commitment_rec = rec
+            r = type("R", (), {
+                "indices": rec["indices"],
+                "bound_violations": rec["bound_violations"],
+                "bound_pairs": rec["bound_pairs"],
+                "k1": None, "k2": None, "k3": None,
+                "audit_excluded": rec["total_provably_excluded"],
+                "audit": rec["sampled_records"],
+                "commitment": rec,
+            })()
+            # Write the signed commitment to the WORM evidence chain.
+            try:
+                worm_path = os.environ.get(
+                    "TRACER_MED_EVIDENCE_PATH", "/var/lib/tracer-med/evidence")
+                WormStorage(base_path=worm_path).append(
+                    {"commitment": rec, "_ctx": {"tenant_id": req.tenant_id}})
+            except Exception as e:
+                logger.warning("WORM evidence persist failed: %s", e)
         except Exception as e:
-            logger.warning("WORM evidence persist failed: %s", e)
+            logger.warning(
+                "Tracer-MED: signed commitment unavailable "
+                "(WORM_SIGNING_PRIVATE_KEY_* not set?) — "
+                "degrading to search_audited certificate: %s", e)
+            commitment_rec = None
+            ar = engine.search_audited(q, k=req.k, max_audit_records=500)
+            r = type("R", (), {
+                "indices": ar["indices"],
+                "bound_violations": ar["bound_violations"],
+                "bound_pairs": ar["bound_pairs"],
+                "k1": None, "k2": None, "k3": None,
+                "audit_excluded": ar["audit_excluded"],
+                "audit": ar["audit"],
+                "commitment": None,
+            })()
     elif hasattr(engine, "search_audited"):
         ar = engine.search_audited(q, k=req.k, max_audit_records=500)
         r = type("R", (), {

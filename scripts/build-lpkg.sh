@@ -53,25 +53,24 @@ app.thumbnail=https://winnex.ai/logo-petit_white.webp
 required-apps=
 PROP
 
-# 3. License file (BSL 1.1).
-cat > "$STAGE/LICENSE" <<'LIC'
-Business Source License 1.1 (BSL 1.1)
+# 3. License file (BSL 1.1) — from repo root (commercial grant included).
+cp "$ROOT/LICENSE" "$STAGE/LICENSE"
 
-Copyright (c) 2026 Winnex AI - Winnex Brasil Solucoes Empresariais LTDA (CNPJ 58.364.637/0001-47)
-Contact: pay@winnex.ai
+# 4. End User License Agreement (Liferay Marketplace §5.5 — worldwide).
+cp "$ROOT/EULA.md" "$STAGE/EULA.md"
 
-Licensed under the Business Source License 1.1 (the "License"); you may not
-use this file except in compliance with the License.
+# 5. Third-party notices (Liferay Marketplace §5.7 — OSS attribution).
+cp "$ROOT/THIRD_PARTY_NOTICES.md" "$STAGE/THIRD_PARTY_NOTICES.md"
 
-Change Date: 2036-01-01
-Change License: GNU General Public License v2.0 or later (GPL-2.0-or-later)
+# 6. Sanity: reject any secret/dev-only/internal file that must not ship.
+for forbidden in ".env" ".pem" ".key" ".crt" "secret" "credential" "autologin" "ANALISE" "ESTUDO" "PLANO" "PROMPT" "internal/"; do
+  if find "$STAGE" -iname "*$forbidden*" -print -quit 2>/dev/null | grep -q .; then
+    echo "ERROR: forbidden artifact '$forbidden' found in package." >&2
+    exit 1
+  fi
+done
 
-For the terms of the Business Source License, see:
-  https://www.mariadb.com/bsl11/
-  https://opensource.org/license/bsl-1-1/
-LIC
-
-# 4. Assemble the .lpkg (ZIP) using Python (portable, no zip dependency).
+# 7. Assemble the .lpkg (ZIP) using Python (portable, no zip dependency).
 python3 - "$STAGE" "$LPKG" <<'PY'
 import os, sys, zipfile
 stage, out = sys.argv[1], sys.argv[2]

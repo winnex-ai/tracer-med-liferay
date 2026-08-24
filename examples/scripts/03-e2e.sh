@@ -5,11 +5,13 @@
 #
 # Usage: ./03-e2e.sh [base_url] [embedding_url] [embedding_model] [admin_key]
 set -euo pipefail
+# The service is fail-closed: an EMPTY MADHAVA_API_KEY leaves auth open
+# (dev only). In a deployed environment pass the real key explicitly.
 BASE="${1:-http://localhost:8600}"
 EMB_URL="${2:-http://localhost:8102}"       # the embedding service (bge-m3 / Qwen3)
 EMB_MODEL="${3:-BAAI/bge-m3}"
-ADMIN_KEY="${4:-change-me-in-production}"
-AUTH="X-Winnex-Api-Key: change-me-in-production"
+ADMIN_KEY="${4:-}"
+AUTH="X-Winnex-Api-Key: ${ADMIN_KEY}"
 
 echo "== 1/5 health =="
 curl -s "$BASE/v1/health" | python3 -m json.tool
