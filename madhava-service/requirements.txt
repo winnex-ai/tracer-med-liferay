@@ -2,8 +2,12 @@
 # Consumes winnex-tracer (unified tracer family: core + med domain) and the
 # winnex-madhava C++20 engine from PyPI. The commitment + WORM evidence chain
 # come from the shared package.
-winnex-tracer[med,all]>=1.1.0
-winnex-madhava>=1.9.3
+# 1.1.4 carrega degraded_reason no payload assinado — sem ele um zero
+# degradado (pool esgotado) e indistinguivel de um zero medido.
+winnex-tracer[med,all]>=1.1.4
+# 1.9.24 corrige o segfault de set_basis com quant=INT8 (que tornava
+# pca_corpus inalcancavel) e honra o k por chamada.
+winnex-madhava>=1.9.24
 winnex-ai-normalize[all]>=1.0.2
 fastapi>=0.100
 uvicorn>=0.20
