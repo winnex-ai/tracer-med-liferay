@@ -24,6 +24,22 @@ import numpy as np
 
 import winnex_madhava as wm
 
+
+def _as_float(v: Any) -> float:
+    """Aceita float, string decimal, ou float.hex ('0x1.11p-1').
+
+    O winnex-tracer >= 1.1.3 assina `global_threshold` em float.hex para que a
+    prova `ub < threshold` não possa ser invertida por arredondamento. O
+    portlet consome decimal.
+    """
+    if isinstance(v, (int, float)):
+        return float(v)
+    s = str(v).strip()
+    try:
+        return float(s)
+    except ValueError:
+        return float.fromhex(s)
+
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -215,7 +231,15 @@ def index(req: IndexRequest):
         stage1_dim=min(req.stage1_dim, dim),
         stage2_dim=min(req.stage2_dim, dim),
         k=req.k,
-        k1_fraction=0.05,
+        # UB Width (basis alinhada ao corpus). Sem isto o motor usa projecao
+        # aleatoria, que MEDIDAMENTE nao exclui nada (total_provably_excluded
+        # = 0) — o certificado sai verdadeiro e vazio. Com pca_corpus:
+        # 94,8%–97,2% de exclusao com prova, 0 violacoes (400 docs bge-m3).
+        # Depende do bugfix de set_basis() em winnex-madhava; com a versao
+        # 1.9.3 publicada no PyPI este caminho SEGFAULTA (corrigido em
+        # 1.9.24). Configuravel por env para degradar com seguranca.
+        basis=os.environ.get("MADHAVA_BASIS", "pca_corpus"),
+        k1_fraction=float(os.environ.get("MADHAVA_K1_FRACTION", "0.05")),
         # Bounded Stage-2 survivors: with postfilter=True the motor computes
         # exact scores for every survivor, so k2 must not grow to ~50k on
         # large corpora (Gargalo #2). 500 keeps recall high while bounding
@@ -379,9 +403,14 @@ def search(req: SearchRequest):
             "true_cosine": 0.0,
             "projected_cosine": 0.0,
             "residual_norm": 0.0,
-            "upper_bound": float(rec.get("upper_bound", 0.0)),
-            "threshold": float(getattr(r, "commitment", None)["global_threshold"])
-                        if getattr(r, "commitment", None) else 0.0,
+            "upper_bound": _as_float(rec.get("upper_bound", 0.0)),
+            # global_threshold vem em float.hex do winnex-tracer >= 1.1.3
+            # (correção C: a prova ub<thr não pode ser invertida por
+            # arredondamento no registro assinado). _as_float aceita as duas
+            # formas.
+            "threshold": _as_float(
+                getattr(r, "commitment", None)["global_threshold"])
+                if getattr(r, "commitment", None) else 0.0,
             "excluded": bool(rec.get("excluded", True)),
             "stage": "stage1",
         }

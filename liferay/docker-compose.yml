@@ -74,6 +74,12 @@ services:
       - ../madhava-service/.env
     environment:
       TRACER_MED_EVIDENCE_PATH: /var/lib/tracer-med/evidence
+      # bge-m3 no host :8102. Sem estas duas variáveis o
+      # winnex_ai_normalize cai no default `http://winnex-embedding:8102`
+      # (hostname de compose externo, não resolve aqui) e toda busca de query
+      # morre com "EmbeddingService: ALL providers unavailable".
+      EMBEDDING_URL: "http://host.docker.internal:8102"
+      EMBEDDING_MODEL: "BAAI/bge-m3"
     # O provider de embeddings (bge-m3 local no host :8102) é alcançado via
     # host.docker.internal — sem isto o madhava-service não resolve o sglang
     # e o embed de query falha (EmbeddingService: ALL providers unavailable).
