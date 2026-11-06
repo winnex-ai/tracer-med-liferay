@@ -8,7 +8,11 @@ winnex-tracer[med,all]>=1.1.4
 # 1.9.24 corrige o segfault de set_basis com quant=INT8 (que tornava
 # pca_corpus inalcancavel) e honra o k por chamada.
 winnex-madhava>=1.9.24
-winnex-ai-normalize[all]>=1.0.2
+# >=1.4.6 pelo quality gate (winnex_ai_normalize.core.quality): o roteador
+# decide basis/k1/stage1 pela PROVA que o motor produziu sobre o corpus, e o
+# gate barra corpus inválido no ingest (NaN, degenerado, dim_shift, drift).
+# Em 1.0.2 o módulo não existe.
+winnex-ai-normalize[all]>=1.4.6
 fastapi>=0.100
 uvicorn>=0.20
 numpy>=1.24

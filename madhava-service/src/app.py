@@ -25,6 +25,21 @@ import numpy as np
 import winnex_madhava as wm
 
 
+def _json_clean(o: Any) -> Any:
+    """Converte numpy scalars/arrays em tipos JSON nativos, recursivamente."""
+    if isinstance(o, dict):
+        return {str(k): _json_clean(v) for k, v in o.items()}
+    if isinstance(o, (list, tuple)):
+        return [_json_clean(v) for v in o]
+    if isinstance(o, np.ndarray):
+        return _json_clean(o.tolist())
+    if isinstance(o, np.generic):
+        return o.item()
+    if isinstance(o, (str, int, float, bool)) or o is None:
+        return o
+    return str(o)
+
+
 def _as_float(v: Any) -> float:
     """Aceita float, string decimal, ou float.hex ('0x1.11p-1').
 
@@ -159,6 +174,9 @@ class SearchRequest(BaseModel):
 # ---------------------------------------------------------------------------
 _engines: Dict[str, Any] = {}
 _corpora: Dict[str, List[VectorDoc]] = {}
+# Relatório do quality gate por tenant — a config roteada e a cobertura de
+# prova que o motor mediu sobre ESTE corpus. Exposto em GET /v1/quality.
+_quality: Dict[str, Dict[str, Any]] = {}
 
 
 # Bounded LRU for query-text → vector. The embedding round-trip is ~80 ms
@@ -223,48 +241,79 @@ def index(req: IndexRequest):
     if X.shape[1] != dim:
         raise HTTPException(422, "inconsistent vector dimensions")
 
-    engine = wm.build_engine(
-        X,
-        dim=dim,
-        metric="cosine",
-        quant="int8",
-        stage1_dim=min(req.stage1_dim, dim),
-        stage2_dim=min(req.stage2_dim, dim),
-        k=req.k,
-        # UB Width (basis alinhada ao corpus). Sem isto o motor usa projecao
-        # aleatoria, que MEDIDAMENTE nao exclui nada (total_provably_excluded
-        # = 0) — o certificado sai verdadeiro e vazio. Com pca_corpus:
-        # 94,8%–97,2% de exclusao com prova, 0 violacoes (400 docs bge-m3).
-        # Depende do bugfix de set_basis() em winnex-madhava; com a versao
-        # 1.9.3 publicada no PyPI este caminho SEGFAULTA (corrigido em
-        # 1.9.24). Configuravel por env para degradar com seguranca.
-        basis=os.environ.get("MADHAVA_BASIS", "pca_corpus"),
-        k1_fraction=float(os.environ.get("MADHAVA_K1_FRACTION", "0.05")),
-        # Bounded Stage-2 survivors: with postfilter=True the motor computes
-        # exact scores for every survivor, so k2 must not grow to ~50k on
-        # large corpora (Gargalo #2). 500 keeps recall high while bounding
-        # post-filter cost. Configurable via env for tuning without rebuild.
-        k2_fraction=float(os.environ.get("MADHAVA_K2_FRACTION", "0.005")),
-        k2_max=int(os.environ.get("MADHAVA_K2_MAX", "500")),
-        modulation=True,
-        postfilter=True,
-        normalize_input=True,
-        early_exit=False,
+    # QUALITY GATE (2026-11-06). O basis/k1/stage NÃO são decisão deste
+    # serviço: o roteador do winnex-ai-normalize decide pela PROVA que o
+    # próprio motor produziu sobre este corpus. Fixar basis aqui é errado —
+    # pca_corpus degrada recall em dados sem manifold (Word2Vec 0.677→0.096,
+    # ProtBERT 1.0→0.134, medidos em configs/dataset_*.json), e random
+    # exclui 0% em manifold forte. O preset escolhe; o serviço só passa as
+    # restrições operacionais que não são roteamento.
+    #
+    # O gate também é o que barra corpus inválido no ingest: NaN, variância
+    # zero, drift de provider, dim_shift e desalinhamento corpus↔referência.
+    # Sem ele, um corpus corrompido indexa e o motor segue reportando
+    # bound_violations=0 — prova sólida sobre lixo.
+    from winnex_ai_normalize.core.quality import (
+        QualityGateError, build_quality_engine,
     )
+
+    try:
+        engine, quality_report = build_quality_engine(
+            X, dim=dim, k=req.k, return_report=True,
+            engine_kwargs={
+                # Não-roteamento: o que o serviço precisa para latência/memória.
+                "k2_fraction": float(os.environ.get("MADHAVA_K2_FRACTION", "0.005")),
+                "k2_max": int(os.environ.get("MADHAVA_K2_MAX", "500")),
+                "modulation": True,
+                "postfilter": True,
+                "normalize_input": True,
+            },
+        )
+    except QualityGateError as e:
+        # 422: o corpus é inválido para indexar, não um erro do servidor.
+        raise HTTPException(422, f"quality gate rejected corpus: {e}")
 
     _engines[req.tenant_id] = engine
     _corpora[req.tenant_id] = req.corpus
+    # to_dict() é a ÚNICA fonte com `verdict` (o QualityReport não tem esse
+    # atributo — só um property de status textual). Ele também traz numpy
+    # scalars/arrays, então converte já na origem: o encoder do FastAPI não
+    # lida com numpy.
+    report_dict = _json_clean(quality_report.to_dict())
+    _quality[req.tenant_id] = report_dict
+
+    # A config está em `suggested_config` no dict, e como atributo no objeto.
+    routed = report_dict.get("suggested_config") or {}
 
     logger.info(
-        "indexed %d docs for tenant %s (dim %d)",
-        len(req.corpus), req.tenant_id, dim)
+        "indexed %d docs for tenant %s (dim %d) | quality=%s basis=%s k1=%s "
+        "stage1=%s quant=%s",
+        len(req.corpus), req.tenant_id, dim,
+        report_dict.get("verdict"), routed.get("basis"),
+        routed.get("k1_fraction"), routed.get("stage1_dim"),
+        routed.get("quant"))
 
     return {
         "tenant_id": req.tenant_id,
         "indexed": len(req.corpus),
         "dim": dim,
         "engine": "winnex-madhava " + getattr(wm, "__version__", "?"),
+        # A config que o gate ROTEou para este corpus — não um default.
+        "quality": {
+            "verdict": report_dict.get("verdict"),
+            "suggested_config": routed,
+            "flags": report_dict.get("flags", []),
+        },
     }
+
+
+@app.get("/v1/quality/{tenant_id}")
+def quality(tenant_id: str):
+    """Por que o motor foi construído assim para este corpus."""
+    if tenant_id not in _quality:
+        raise HTTPException(404, f"tenant {tenant_id} not indexed")
+    # O report carrega numpy scalars; o encoder do FastAPI não os aceita.
+    return _quality[tenant_id]
 
 
 @app.post("/v1/search", dependencies=[Depends(require_api_key)])
